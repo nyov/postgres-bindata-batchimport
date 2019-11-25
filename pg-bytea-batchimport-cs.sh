@@ -7,7 +7,7 @@
 # Public Domain
 #
 # Run as
-# ./this-script.sh <databasename> <source-directory> [<tablename>]
+# ./pg-bytea-batchimport-cs.sh <databasename> <source-directory> [<tablename>]
 #
 
 DATABASE="${1}"
@@ -39,10 +39,6 @@ psql -c "${SQL}" "${DATABASE}"
 SQL="\copy \"${TBLENAME}\" (file_name) FROM PROGRAM '${EVAL_CMD}' WITH (FORMAT csv, DELIMITER '|')"
 psql -c "${SQL}" "${DATABASE}"
 
-# Remove the directory name itself, if any (from `ls / -R` output)
-SQL="DELETE FROM \"${TBLENAME}\" WHERE file_name LIKE '${FILEPATH}%:'"
-psql -c "${SQL}" "${DATABASE}"
-
 # Generate a loading script with psql instructions
 SQL="SELECT '\lo_import ' || quote_literal(replace(file_name, '\', '/'))
 || '
@@ -55,7 +51,6 @@ echo "Generated ${TMPFILE}"
 
 # CLIENT-SIDE data loading (slow for many files, runs an UPDATE for each file)
 # - execute generated psql instructions -
-# db=# \i /tmp/loadscript.psql
 echo "Loading data..."
 psql -q -c '\timing off' -f "${TMPFILE}" "${DATABASE}"
 if [ $? -eq 0 ]; then

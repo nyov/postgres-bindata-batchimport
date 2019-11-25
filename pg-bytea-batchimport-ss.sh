@@ -7,7 +7,7 @@
 # Public Domain
 #
 # Run as
-# ./this-script.sh <databasename> <source-directory> [<tablename>]
+# ./pg-bytea-batchimport-ss.sh <databasename> <source-directory> [<tablename>]
 #
 # Note: <source-directory> will be expanded to an absolute path,
 #       which must be readable by the postgres cluster user.
@@ -38,10 +38,6 @@ SQL="CREATE TABLE \"${TBLENAME}\" (
 psql -c "${SQL}" "${DATABASE}"
 
 SQL="COPY \"${TBLENAME}\" (file_name) FROM PROGRAM '${EVAL_CMD}' WITH (FORMAT csv, DELIMITER '|')"
-psql -c "${SQL}" "${DATABASE}"
-
-# Remove the directory name itself, if any (from `ls / -R` output)
-SQL="DELETE FROM \"${TBLENAME}\" WHERE file_name LIKE '${FILEPATH}%:'"
 psql -c "${SQL}" "${DATABASE}"
 
 # SERVER-SIDE data import

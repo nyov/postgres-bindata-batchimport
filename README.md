@@ -1,12 +1,12 @@
-postgres-bytea-batchimport
---------------------------
+postgres-bindata-batchimport
+----------------------------
 
 PostgreSQL batch-importing binary files, from disk to database table.
 Using the [Large Objects][1] interface.
 (PostgreSQL 9.3+)
 
-The shell scripts `pg_bytea_batchimport_cs.sh` and `pg_bytea_batchimport_ss.sh`
-are mostly similar.
+The shell scripts `pg-*-batchimport-cs.sh` and `pg-*-batchimport-ss.sh`
+are very similar.
 The former (*client-side*) can be used with a remote database cluster and only
 uses `psql`-local functions, while the latter (*server-side*) executes commands
 on the db cluster and thus requires cluster-local file access (read permission)
@@ -21,11 +21,23 @@ impact the execution speed.
 
 ##### Usage #####
 
+Importing files as Large Objects only:
 ```sh
-./pg_bytea_batchimport_cs.sh <databasename> <source-directory> [<tablename>]
-./pg_bytea_batchimport_ss.sh <databasename> <source-directory> [<tablename>]
+./pg-lo-batchimport-cs.sh    <databasename> <source-directory> [<tablename>]
+./pg-lo-batchimport-ss.sh    <databasename> <source-directory> [<tablename>]
 ```
-The `source-directory` will be traversed recursively, using `find`, by default.
+Using large objects gives all the gimmicks that the [Large Objects][1]
+file-like interface supports (such as seeking). Reference them by the table's
+`oid` column.
+
+Converting files into BYTEA table rows after import:
+```sh
+./pg-bytea-batchimport-cs.sh <databasename> <source-directory> [<tablename>]
+./pg-bytea-batchimport-ss.sh <databasename> <source-directory> [<tablename>]
+```
+The `source-directory` will be walked recursively, using `find`, by default.
+`find` supports many modifier options to grab files selectively, e.g. limited
+to depth level, or files newer than `$last-run` minutes, for recurring jobs.
 
 ##### Example #####
 
@@ -41,9 +53,9 @@ DB="postgres"
 TABLE="tmp_docs"
 
 # Run script
-./pg_bytea_batchimport_cs.sh $DB /tmp/randomtext $TABLE
+./pg-bytea-batchimport-cs.sh $DB /tmp/randomtext $TABLE
 # (or) Server-side version; faster, but requires a local db cluster
-#./pg_bytea_batchimport_ss.sh $DB /tmp/randomtext $TABLE
+#./pg-bytea-batchimport-ss.sh $DB /tmp/randomtext $TABLE
 
 # Verify contents in db; should count 20 rows
 psql -c "SELECT count(*) FROM $TABLE" $DB
@@ -58,21 +70,23 @@ unset DB
 (This code snippet can be pasted into a file and executed as a shell script,
  as is.)
 
-##### Notes #####
+##### Notes & Caveats #####
 
-Because the workflow used in these scripts makes a round-trip through
-large-objects-storage land, the DB cluster may use up to double the space
-of the source file directory, for the runtime duration of the script.
+If the script aborts before the created large objects have been cleaned up
+and the table is then dropped without unlinking them, orphaned objects stay
+around. The `\lo_list` (local to database) command can help finding them.
+If the current DB contains no valid objects beside the failed import, the
+nuke-em command is `SELECT lo_unlink(oid) FROM pg_largeobject_metadata;`.
 
-Depending on the type of your files, this may not be true, however; with
+Because the workflow used in the `pg-bytea-batchimport-*.sh` scripts makes a
+round-trip through large-objects-storage land, the DB cluster may use up to
+double the space of the source file directory, for the runtime duration of the
+script.
+
+Depending on the type of files, this may not be true, however; with
 text-files I've seen a compression ratio of 2 GiB raw on-disk to 400 MiB
 in-db of the same data. Which means even with two copies, the database was
 using less storage than the source directory data.
-
-As a bonus, the scripts are easily adapted to stop after the Large Objects
-data is loaded, instead of copying it into the `bytea` table column, and then
-FK-reference it from the table's `oid` column; giving one all the gimmicks
-that the [Large Objects][1] interface supports (such as file-seeking).
 
 ---
 
